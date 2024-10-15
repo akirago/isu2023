@@ -27,7 +27,8 @@ import mysql.connector
 from flask import Flask, Response, request, send_file, session
 from mysql.connector.errors import DatabaseError
 from sqlalchemy import create_engine
-
+from contextlib import closing
+from sqlalchemy.orm import sessionmaker
 
 class Settings(object):
     LISTEN_PORT = 8080
@@ -323,45 +324,35 @@ def search_livestreams_handler() -> tuple[list[dict[str, Any]], int]:
 @app.route("/api/livestream", methods=["GET"])
 def get_my_livestreams_handler() -> tuple[list[dict[str, Any]], int]:
     verify_user_session()
-
     user_id = session.get(Settings.DEFAULT_USER_ID_KEY)
     if not user_id:
         raise HttpException("unauthorized", UNAUTHORIZED)
 
-    conn = engine.raw_connection()
-
-    try:
-        conn.start_transaction()
-        c = conn.cursor(dictionary=True)
-
-        sql = "SELECT * FROM livestreams WHERE user_id = %s"
-        c.execute(sql, [user_id])
-        rows = c.fetchall()
-        if rows is None:
-            raise HttpException(
-                "failed to get livestreams",
-                INTERNAL_SERVER_ERROR,
-            )
-        if len(rows) == 0:
-            rows = []
-        livestream_models = [models.LiveStreamModel(**row) for row in rows]
-
-        livestreams = []
-        for livestream_model in livestream_models:
-            livestream = fill_livestream_response(c, livestream_model)
-            if not livestream:
+    with closing(Session()) as session:
+        try:
+            session.begin()
+            sql = "SELECT * FROM livestreams WHERE user_id = :user_id"
+            rows = session.execute(sql, {'user_id': user_id}).fetchall()
+            if not rows:
                 raise HttpException(
-                    "failed to fill livestream",
+                    "failed to get livestreams",
                     INTERNAL_SERVER_ERROR,
                 )
-            livestreams.append(asdict(livestream))
-        return livestreams, OK
-    except DatabaseError as err:
-        conn.rollback()
-        raise err
-    finally:
-        conn.commit()
-        conn.close()
+            livestream_models = [models.LiveStreamModel(**row) for row in rows]
+            livestreams = []
+            for livestream_model in livestream_models:
+                livestream = fill_livestream_response(session, livestream_model)
+                if not livestream:
+                    raise HttpException(
+                        "failed to fill livestream",
+                        INTERNAL_SERVER_ERROR,
+                    )
+                livestreams.append(asdict(livestream))
+            session.commit()
+            return livestreams, OK
+        except DatabaseError as err:
+            session.rollback()
+            raise
 
 
 @app.route("/api/user/<string:username>/livestream", methods=["GET"])
@@ -1718,6 +1709,7 @@ if __name__ == "__main__":
     engine = create_engine(
         f"mysql+mysqlconnector://{Settings.DB_USER}:{Settings.DB_PASSWORD}@{Settings.DB_HOST}:{Settings.DB_PORT}/{Settings.DB_NAME}"
     )
+    Session = sessionmaker(bind=engine)
     app.secret_key = Settings.SESSION_SECRET_KEY
     app.config["SESSION_COOKIE_DOMAIN"] = Settings.SESSION_COOKIE_DOMAIN
     app.config["SESSION_COOKIE_PATH"] = Settings.SESSION_COOKIE_PATH

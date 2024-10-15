@@ -9,6 +9,8 @@ pymysql = "*"
 bcrypt = "*"
 sqlalchemy = "*"
 mysql-connector-python = "*"
+contextlib = "*"
+sqlalchemy.orm.sessionmaker = "*"
 
 [dev-packages]
 flake8 = "*"
