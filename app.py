@@ -1709,7 +1709,8 @@ if __name__ == "__main__":
     engine = create_engine(
         f"mysql+mysqlconnector://{Settings.DB_USER}:{Settings.DB_PASSWORD}@{Settings.DB_HOST}:{Settings.DB_PORT}/{Settings.DB_NAME}"
     )
-    Session = sessionmaker(bind=engine)
+    global session
+    session = sessionmaker(bind=engine)
     app.secret_key = Settings.SESSION_SECRET_KEY
     app.config["SESSION_COOKIE_DOMAIN"] = Settings.SESSION_COOKIE_DOMAIN
     app.config["SESSION_COOKIE_PATH"] = Settings.SESSION_COOKIE_PATH
