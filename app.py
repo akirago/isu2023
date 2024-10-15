@@ -328,11 +328,11 @@ def get_my_livestreams_handler() -> tuple[list[dict[str, Any]], int]:
     if not user_id:
         raise HttpException("unauthorized", UNAUTHORIZED)
 
-    with closing(Session()) as session:
+    with closing(Session()) as pool_session:
         try:
-            session.begin()
+            pool_session.begin()
             sql = "SELECT * FROM livestreams WHERE user_id = :user_id"
-            rows = session.execute(sql, {'user_id': user_id}).fetchall()
+            rows = pool_session.execute(sql, {'user_id': user_id}).fetchall()
             if not rows:
                 raise HttpException(
                     "failed to get livestreams",
@@ -341,17 +341,17 @@ def get_my_livestreams_handler() -> tuple[list[dict[str, Any]], int]:
             livestream_models = [models.LiveStreamModel(**row) for row in rows]
             livestreams = []
             for livestream_model in livestream_models:
-                livestream = fill_livestream_response(session, livestream_model)
+                livestream = fill_livestream_response(pool_session, livestream_model)
                 if not livestream:
                     raise HttpException(
                         "failed to fill livestream",
                         INTERNAL_SERVER_ERROR,
                     )
                 livestreams.append(asdict(livestream))
-            session.commit()
+            pool_session.commit()
             return livestreams, OK
         except DatabaseError as err:
-            session.rollback()
+            pool_session.rollback()
             raise err
 
 @app.route("/api/user/<string:username>/livestream", methods=["GET"])
