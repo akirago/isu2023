@@ -352,8 +352,7 @@ def get_my_livestreams_handler() -> tuple[list[dict[str, Any]], int]:
             return livestreams, OK
         except DatabaseError as err:
             session.rollback()
-            raise
-
+            raise err
 
 @app.route("/api/user/<string:username>/livestream", methods=["GET"])
 def get_user_livestreams_handler(username: str) -> tuple[list[dict[str, Any]], int]:
@@ -1709,8 +1708,8 @@ if __name__ == "__main__":
     engine = create_engine(
         f"mysql+mysqlconnector://{Settings.DB_USER}:{Settings.DB_PASSWORD}@{Settings.DB_HOST}:{Settings.DB_PORT}/{Settings.DB_NAME}"
     )
-    global session
-    session = sessionmaker(bind=engine)
+    global Session
+    Session = sessionmaker(bind=engine)
     app.secret_key = Settings.SESSION_SECRET_KEY
     app.config["SESSION_COOKIE_DOMAIN"] = Settings.SESSION_COOKIE_DOMAIN
     app.config["SESSION_COOKIE_PATH"] = Settings.SESSION_COOKIE_PATH
